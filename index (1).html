@@ -1,0 +1,681 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">Загрузка ...</title>
+    <style>
+        :root {
+            --primary: #7c3aed;
+            --primary-dark: #5b21b6;
+            --primary-light: #8b5cf6;
+            --background: #0f172a;
+            --surface: #1e293b;
+            --text: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --error: #ef4444;
+            --success: #10b981;
+            --border-radius: 12px;
+            --box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--background);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            color: var(--text);
+        }
+
+        .контейнер {
+            text-align: center;
+            background: var(--surface);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: var(--box-shadow);
+            width: 90%;
+            max-width: 420px;
+            position: relative;
+            z-index: 1;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .логотип {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1.5rem;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .группа-кнопок {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        button {
+            background: var(--primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            color: white;
+            font-size: 1rem;
+            font-weight: 500;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background: var(--primary-light);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.вторичная {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+        }
+
+        button.вторичная:hover {
+            background: rgba(124, 58, 237, 0.1);
+        }
+
+        #текст-уведомления {
+            margin-top: 1.5rem;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid var(--primary);
+            border-radius: var(--border-radius);
+            padding: 0.75rem;
+            display: none;
+            text-align: left;
+        }
+
+        #текст-уведомления .заголовок-статуса {
+            color: var(--primary-light);
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        #текст-уведомления .сообщение-статуса {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        #блокировка-закрытия {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 9999;
+            color: white;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        #блокировка-закрытия h2 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        #блокировка-закрытия small {
+            font-size: 0.875rem;
+            margin-top: 1rem;
+            opacity: 0.8;
+            max-width: 80%;
+        }
+
+        .загрузчик {
+            width: 48px;
+            height: 48px;
+            border: 5px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: вращение 1s ease-in-out infinite;
+            margin-bottom: 1.5rem;
+        }
+
+        .обратный-отсчет {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 1rem 0;
+        }
+
+        @keyframes вращение {
+            to { transform: rotate(360deg); }
+        }
+
+        .иконка {
+            width: 20px;
+            height: 20px;
+        }
+
+        .успех { color: var(--success); }
+        .ошибка { color: var(--error); }
+
+        .ios-контейнер {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 84vw;
+            max-width: 360px;
+        }
+
+        .диалог {
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-radius: 8px;
+            padding: 20px;
+            box-sizing: border-box;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .диалог h1 {
+            font-weight: 700;
+            text-align: center;
+            padding: 0 20px;
+            font-size: 20px;
+            line-height: 24px;
+            margin-bottom: 15px;
+            color: #000;
+        }
+
+        .диалог p {
+            color: rgba(0, 0, 0, 0.75);
+            font-size: 15px;
+            line-height: 18px;
+            text-align: center;
+            margin: 7px 0;
+            padding: 0 20px;
+        }
+
+        .пульсация {
+            animation: пульсация 1s infinite ease-out;
+        }
+
+        @keyframes пульсация {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .кнопка-удержания {
+            background-color: #FE2C55;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 20px 0;
+            box-shadow: 0 4px 15px rgba(254, 44, 85, 0.3);
+            transition: transform 0.1s;
+            width: 100%;
+            font-weight: 600;
+            min-height: 48px;
+        }
+
+        .кнопка-удержания:active {
+            transform: scale(0.95);
+        }
+
+        .меню-браузера {
+            display: none;
+            background-color: white;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 8px 0 0 0;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .меню-браузера a {
+            display: block;
+            padding: 12px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            color: #333;
+            text-decoration: none;
+            text-align: center;
+            font-weight: 500;
+            font-size: 16px;
+        }
+
+        .меню-браузера a:hover {
+            background-color: #e0e0e0;
+        }
+
+        .иконка-tiktok {
+            width: 50px;
+            height: 50px;
+            margin-bottom: 15px;
+        }
+
+        .стрелка {
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAgCAYAAAAWl4iLAAABKGlDQ1BBcHBsZSBSR0IAACiRlY89S8NQFIaf24qCQxEJbsLFQVzEj61j0pYiONQokmRrkksVbXK5uX508k/4IxxcHAX9BxUHwcmf4CaIg4NDhAwFi8/0nPfA4T1QW3PbXqe2AMPMGr/rySCM5Nwzs9QBoJ8U2u31dgGyPFNM8PmKAHhZd9teZ3L/J/OJNhb4BrZTVSQgNoH0wmoL4hpw4hNtQdwAjjnwWyAegMag9DHQiEt/AxomCCMQ74AzCMIIagBOXLoDOFZdWoBWrkfmeHBk5Vaz2ZRumsdK7o8Kq4aF3MmS3Ojc9K1KgbJf2dvV+lRJv+v98+FpBGEkS/vYQwBiaVxlFcmZOf9VIZ6mz9WN0SO4PszcV9nhF9xuwHK9ylZXYPEK7vQP8cBQPfXa6rwAAAAJcEhZcwAACxMAAAsTAQCanBgAAAX+aVRYdFhNTDpjb20uYWRvYmUueG1wAAAAAAA8P3hwYWNrZXQgYmVnaW49Iu+7vyIgaWQ9Ilc1TTBNcENlaGlIenJlU3pOVGN6a2M5ZCI/PiA8eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIiB4OnhtcHRrPSJBZG9iZSBYTVAgQ29yZSA3LjAtYzAwMCA3OS5kYWJhY2JiLCAyMDIxLzA0LzE0LTAwOjM5OjQ0ICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtbG5zOnN0RXZ0PSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VFdmVudCMiIHhtbG5zOnhtcD0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wLyIgeG1sbnM6ZGM9Imh0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvIiB4bWxuczpwaG90b3Nob3A9Imh0dHA6Ly9ucy5hZG9iZS5jb20vcGhvdG9zaG9wLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDpGNzdGMTE3NDA3MjA2ODExODA4M0VCODNDNjJCRDdDMSIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo5RjczNjdCMDIyQTIxMUU1QkZERkRGOUIzNjA2N0FEQiIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo1ODdhZTE4Zi05NjI4LTQ4ZDYtODkzOS0wNzAyYTZkZDUxN2EiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTUgKE1hY2ludG9zaCkiIHhtcDpDcmVhdGVEYXRlPSIyMDIzLTA1LTAxVDAyOjU5OjA1KzAzOjAwIiB4bXA6TW9kaWZ5RGF0ZT0iMjAyMy0wNS0wMVQwMzowMDoxMCswMzowMCIgeG1wOk1ldGFkYXRhRGF0ZT0iMjAyMy0wNS0wMVQwMzowMDoxMCswMzowMCIgZGM6Zm9ybWF0PSJpbWFnZS9wbmciIHBob3Rvc2hvcDpDb2xvck1vZGU9IjMiIHBob3Rvc2hvcDpJQ0NQcm9maWxlPSJBcHBsZSBSR0IiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDoyYmM5MjRhYy01ODVkLTRkNDUtODM0My03NDZkOGM0ZTZmOTEiIHN0UmVmOmRvY3VtZW50SUQ9ImFkb2JlOmRvY2lkOnBob3Rvc2hvcDo2YjM4MWZkMC0yNDE2LTExNzgtYmY5YS1iODJjYmZjZTcxZDUiLz4gPHhtcE1NOkhpc3Rvcnk+IDxyZGY6U2VxPiA8cmRmOmxpIHN0RXZ0OmFjdGlvbj0ic2F2ZWQiIHN0RXZ0Omluc3RhbmNlSUQ9InhtcC5paWQ6NTg3YWUxOGYtOTYyOC00OGQ2LTg5MzktMDcwMmE2ZGQ1MTdhIiBzdEV2dDp3aGVuPSIyMDIzLTA5LTAxVDAzOjAwOjEwKzAzOjAwIiBzdEV2dDpzb2Z0d2FyZUFnZW50PSJBZG9iZSBQaG90b3Nob3AgMjIuNSAoTWFjaW50b3NoKSIgc3RFdnQ6Y2hhbmdlZD0iLyIvPiA8L3JkZjpTZXE+IDwveG1wTU06SGlzdG9yeT4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz7ruI9eAAAA50lEQVRIie3SQQ7BQBQG4L8O4KC2XVgQRRAEFSQSB7B0JzcQbET4LTojzzOtKd3pnzQzmXnvy6R5IIkPX0ByQvJMcuBRD5LwQZd8zbQIeE53Rr/AsxTUpv8NPFbIXa02nTzwQDW3SB7Mfm9eKhP5wF3V1DbnEgaTfyzTyIIjVdwTdxoGk+mQqbvgpioaqhe4YJCMVV8o4VBduuY0DXbNec3CF3EYO9As2OJrYRwsvBMvDb6ALb4yNVsLg2Q1pcEXfnMqSHJEMXk6layqX1LCJVzCJfzf8NWst6LhBYATgI0vHJD0rc2VB0E4yE5ANtF7AAAAAElFTkSuQmCC');
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: 40px;
+            width: 44px;
+            height: 64px;
+            margin: 15px auto 0 auto;
+            animation: подпрыгивание-стрелки 1s infinite ease-in-out;
+            transform: scaleX(-1);
+        }
+
+        @keyframes подпрыгивание-стрелки {
+            0% { transform: translateY(0) scaleX(-1); }
+            50% { transform: translateY(30px) scaleX(-1); }
+            100% { transform: translateY(0px) scaleX(-1); }
+        }
+
+        .ios-загрузчик {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: вращение 2s linear infinite;
+            display: none;
+            margin-left: auto;
+            margin-right: auto;
+            top: 50%;
+            position: relative;
+            transform: translateY(-50%);
+        }
+    </style>
+</head>
+<body>
+    <div id="блокировка-закрытия">
+        <div class="загрузчик"></div>
+        <h2 id="сообщение-перенаправления">Подождите, перенаправление...</h2>
+        <small id="подсказка-перенаправления">Пожалуйста, не закрывайте это окно</small>
+    </div>
+
+    <div id="основной-контейнер" class="контейнер">
+        <div class="логотип">TikTok18+</div>
+        
+        <h1 id="основной-заголовок">Вы перенаправляетесь</h1>
+        
+        <div class="обратный-отсчет" id="обратный-отсчет">2</div>
+        
+        <p id="подтекст">Автоматическое перенаправление через <span id="текст-обратного-отсчета">2 секунды</span></p>
+        
+        <div class="группа-кнопок">
+            <button onclick="открытьСсылка()">
+                <svg class="иконка" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span id="кнопка-открытия">Открыть Ссылку</span>
+            </button>
+            <button onclick="копироватьСсылка()" class="вторичная">
+                <svg class="иконка" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+                <span id="кнопка-копирования">Копировать Ссылку</span>
+            </button>
+        </div>
+        
+        <div id="текст-уведомления">
+            <div class="заголовок-статуса">
+                <svg class="иконка" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span id="заголовок-статуса">Статус</span>
+            </div>
+            <div class="сообщение-статуса" id="сообщение-статуса">Загрузка ...</div>
+        </div>
+    </div>
+
+    <div id="ios-контейнер" class="ios-контейнер" style="display: none;">
+        <div class="ios-загрузчик" id="спиннер"></div>
+        <div class="диалог" id="диалог">
+            <svg class="иконка-tiktok" viewBox="0 0 24 24" fill="#000000">
+                <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
+            </svg>
+            
+            <h1 id="ios-заголовок">Откройте во внешнем браузере</h1>
+            <div id="контейнер-действий">
+                <button id="кнопка-удержания" class="кнопка-удержания">Посмотреть мои фото</button>
+                <div id="инструкции" style="display: none;">
+                    <p id="инструкция1">1. Зажмите кнопку 'Открыть в Safari' ниже</p>
+                    <p id="инструкция2" class="пульсация">2. Выберите 'Открыть ссылку' в появившемся меню</p>
+                    <div id="меню-браузера" class="меню-браузера">
+                        <a href="#" id="ссылка-safari">Открыть в Safari</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="стрелка"></div>
+    </div>
+
+    <script>
+        // Конфигурация
+        const конфиг = {
+            ссылка: 't.me/xaxa30', // Ссылка на Telegram-канал
+            языкПоУмолчанию: 'ru',
+            времяОбратногоОтсчета: 2
+        };
+        
+        const urlПеренаправления = 'https://' + конфиг.ссылка;
+        const этоAndroid = /Android/i.test(navigator.userAgent);
+        const этоIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        let перенаправлениеНачато = false;
+        
+        // Переводы для интерфейса
+        const переводы = {
+            ru: {
+                заголовокСтраницы: "Загрузка ...",
+                основнойЗаголовок: "Вы перенаправляетесь",
+                подтекст: "Автоматическое перенаправление через",
+                секунды: "секунд",
+                кнопкаОткрытия: "Открыть Ссылку",
+                кнопкаКопирования: "Копировать Ссылку",
+                заголовокСтатуса: "Статус",
+                сообщениеСтатуса: "Загрузка ...",
+                сообщениеПеренаправления: "Подождите, перенаправление...",
+                подсказкаПеренаправления: "Пожалуйста, не закрывайте это окно",
+                успехКопирования: "Ссылка скопирована в буфер обмена!",
+                ошибкаКопирования: "Не удалось скопировать ссылку.",
+                резервноеПеренаправление: "Если перенаправление не сработало, скопируйте ссылку и откройте её вручную.",
+                iosЗаголовокСтраницы: "Откройте во внешнем браузере",
+                iosЗаголовок: "Откройте во внешнем браузере",
+                iosКнопка: "Посмотреть мои фото",
+                iosИнструкция1: "1. Зажмите кнопку 'Открыть в Safari' ниже",
+                iosИнструкция2: "2. Выберите 'Открыть ссылку' в появившемся меню",
+                iosSafari: "Открыть в Safari"
+            }
+        };
+
+        // Определение браузера TikTok
+        function вБраузереTikTok() {
+            const пользовательскийАгент = navigator.userAgent;
+            return (
+                пользовательскийАгент.includes('BytedanceWebview') || 
+                пользовательскийАгент.includes('musical_ly') ||
+                пользовательскийАгент.includes('Musical_ly') ||
+                пользовательскийАгент.includes('TikTok') ||
+                /musical_ly[\s_\/]?[\d\.]+/i.test(пользовательскийАгент) ||
+                /[a-f0-9]{7}\s?musical_ly_[\d\.]+/i.test(пользовательскийАгент)
+            );
+        }
+
+        // Установка языка
+        function установитьЯзык(язык) {
+            const данныеЯзыка = переводы[язык] || переводы[конфиг.языкПоУмолчанию];
+            
+            if (этоIOS && вБраузереTikTok()) {
+                document.getElementById('page-title').textContent = данныеЯзыка.iosЗаголовокСтраницы;
+                document.title = данныеЯзыка.iosЗаголовокСтраницы;
+                document.getElementById('ios-заголовок').textContent = данныеЯзыка.iosЗаголовок;
+                document.getElementById('кнопка-удержания').textContent = данныеЯзыка.iosКнопка;
+                document.getElementById('инструкция1').textContent = данныеЯзыка.iosИнструкция1;
+                document.getElementById('инструкция2').textContent = данныеЯзыка.iosИнструкция2;
+                document.getElementById('ссылка-safari').textContent = данныеЯзыка.iosSafari;
+            } else {
+                document.getElementById('page-title').textContent = данныеЯзыка.заголовокСтраницы;
+                document.title = данныеЯзыка.заголовокСтраницы;
+                document.getElementById('основной-заголовок').textContent = данныеЯзыка.основнойЗаголовок;
+                document.getElementById('кнопка-открытия').textContent = данныеЯзыка.кнопкаОткрытия;
+                document.getElementById('кнопка-копирования').textContent = данныеЯзыка.кнопкаКопирования;
+                document.getElementById('заголовок-статуса').textContent = данныеЯзыка.заголовокСтатуса;
+                document.getElementById('сообщение-статуса').textContent = данныеЯзыка.сообщениеСтатуса;
+                document.getElementById('сообщение-перенаправления').textContent = данныеЯзыка.сообщениеПеренаправления;
+                document.getElementById('подсказка-перенаправления').textContent = данныеЯзыка.подсказкаПеренаправления;
+                обновитьТекстОбратногоОтсчета();
+            }
+            
+            localStorage.setItem('предпочитаемыйЯзык', язык);
+        }
+
+        function изменитьЯзык(язык) {
+            установитьЯзык(язык);
+        }
+
+        function инициализироватьЯзык() {
+            const предпочитаемыйЯзык = localStorage.getItem('предпочитаемыйЯзык') || конфиг.языкПоУмолчанию;
+            установитьЯзык(предпочитаемыйЯзык);
+        }
+
+        function обновитьТекстОбратногоОтсчета() {
+            const язык = конфиг.языкПоУмолчанию;
+            const данныеЯзыка = переводы[язык];
+            const текстОбратногоОтсчета = document.getElementById('текст-обратного-отсчета');
+            const числоОбратногоОтсчета = document.getElementById('обратный-отсчет').textContent;
+            
+            текстОбратногоОтсчета.textContent = `${числоОбратногоОтсчета} ${данныеЯзыка.секунды}`;
+        }
+
+        function показатьБлокировкуЗакрытия() {
+            document.getElementById('блокировка-закрытия').style.display = 'flex';
+            history.pushState(null, null, location.href);
+            window.onpopstate = function() {
+                history.go(1);
+                показатьБлокировкуЗакрытия();
+            };
+        }
+
+        function открытьСсылка() {
+            if (перенаправлениеНачато) return;
+            перенаправлениеНачато = true;
+            
+            показатьБлокировкуЗакрытия();
+            
+            setTimeout(() => {
+                const текстУведомления = document.getElementById("текст-уведомления");
+                const сообщениеСтатуса = document.getElementById("сообщение-статуса");
+                const язык = конфиг.языкПоУмолчанию;
+                const данныеЯзыка = переводы[язык];
+                
+                текстУведомления.style.display = "block";
+                сообщениеСтатуса.textContent = данныеЯзыка.резервноеПеренаправление;
+            }, 2000);
+            
+            window.location.href = urlПеренаправления;
+        }
+
+        function начатьАвтоПеренаправление() {
+            if (перенаправлениеНачато) return;
+            перенаправлениеНачато = true;
+            
+            показатьБлокировкуЗакрытия();
+            
+            setTimeout(() => {
+                const текстУведомления = document.getElementById("текст-уведомления");
+                const сообщениеСтатуса = document.getElementById("сообщение-статуса");
+                const язык = конфиг.языкПоУмолчанию;
+                const данныеЯзыка = переводы[язык];
+                
+                текстУведомления.style.display = "block";
+                сообщениеСтатуса.textContent = данныеЯзыка.резервноеПеренаправление;
+            }, 2000);
+            
+            if (этоAndroid) {
+                window.location.href = urlПеренаправления;
+            } else if (этоIOS && !вБраузереTikTok()) {
+                window.location.href = urlПеренаправления;
+                
+                setTimeout(() => {
+                    const новоеОкно = window.open('', '_blank');
+                    if (новоеОкно) {
+                        новоеОкно.location.href = urlПеренаправления;
+                    } else {
+                        window.location.href = urlПеренаправления;
+                    }
+                }, 500);
+                
+                setTimeout(() => {
+                    window.location.href = urlПеренаправления;
+                }, 1000);
+            } else {
+                window.open(urlПеренаправления, '_blank');
+            }
+        }
+
+        function копироватьСсылка() {
+            navigator.clipboard.writeText(urlПеренаправления).then(() => {
+                const текстУведомления = document.getElementById("текст-уведомления");
+                const заголовокСтатуса = document.querySelector(".заголовок-статуса");
+                const сообщениеСтатуса = document.querySelector(".сообщение-статуса");
+                const язык = конфиг.языкПоУмолчанию;
+                const данныеЯзыка = переводы[язык];
+                
+                текстУведомления.style.display = "block";
+                заголовокСтатуса.innerHTML = `<svg class="иконка успех" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg> ${данныеЯзыка.заголовокСтатуса}`;
+                сообщениеСтатуса.textContent = данныеЯзыка.успехКопирования;
+                
+                setTimeout(() => {
+                    текстУведомления.style.display = "none";
+                }, 3000);
+            }, () => {
+                const текстУведомления = document.getElementById("текст-уведомления");
+                const заголовокСтатуса = document.querySelector(".заголовок-статуса");
+                const сообщениеСтатуса = document.querySelector(".сообщение-статуса");
+                const язык = конфиг.языкПоУмолчанию;
+                const данныеЯзыка = переводы[язык];
+                
+                текстУведомления.style.display = "block";
+                заголовокСтатуса.innerHTML = `<svg class="иконка ошибка" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg> ${данныеЯзыка.заголовокСтатуса}`;
+                сообщениеСтатуса.textContent = данныеЯзыка.ошибкаКопирования;
+            });
+        }
+
+        function инициализироватьОбратныйОтсчет() {
+            let числоОбратногоОтсчета = конфиг.времяОбратногоОтсчета;
+            const элементОбратногоОтсчета = document.getElementById('обратный-отсчет');
+            const интервалОбратногоОтсчета = setInterval(() => {
+                числоОбратногоОтсчета--;
+                элементОбратногоОтсчета.textContent = числоОбратногоОтсчета;
+                обновитьТекстОбратногоОтсчета();
+                
+                if (числоОбратногоОтсчета <= 0) {
+                    clearInterval(интервалОбратногоОтсчета);
+                    начатьАвтоПеренаправление();
+                }
+            }, 1000);
+        }
+
+        function инициализироватьIOSСтраницу() {
+            if (!вБраузереTikTok()) {
+                window.location.href = urlПеренаправления;
+                return;
+            }
+            
+            const кнопкаУдержания = document.getElementById('кнопка-удержания');
+            const контейнерДействий = document.getElementById('контейнер-действий');
+            const элементИнструкций = document.getElementById('инструкции');
+            const менюБраузера = document.getElementById('меню-браузера');
+            const ссылкаSafari = document.getElementById('ссылка-safari');
+            
+            ссылкаSafari.href = urlПеренаправления;
+            
+            кнопкаУдержания.addEventListener('click', function(e) {
+                e.preventDefault();
+                кнопкаУдержания.style.display = 'none';
+                элементИнструкций.style.display = 'block';
+                менюБраузера.style.display = 'block';
+                контейнерДействий.scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+
+        function инициализация() {
+            if (этоIOS && вБраузереTikTok()) {
+                document.getElementById('основной-контейнер').style.display = 'none';
+                document.getElementById('ios-контейнер').style.display = 'block';
+                document.body.style.backgroundColor = '#4B0082';
+                инициализироватьIOSСтраницу();
+            } else {
+                document.getElementById('ios-контейнер').style.display = 'none';
+                document.getElementById('основной-контейнер').style.display = 'block';
+                инициализироватьОбратныйОтсчет();
+            }
+            инициализироватьЯзык();
+        }
+
+        document.addEventListener('DOMContentLoaded', инициализация);
+    </script>
+</body>
+</html>
